@@ -2,45 +2,77 @@
 import socket
 import threading
 import tkinter as tk
-from flask import Flask, request, jsonify
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import serialization, hashes
 
-app = Flask(__name__)
-clients = []
+# Gerar chave privada do servidor
+server_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+server_public_key = server_private_key.public_key()
+
+# Armazenar chave pública em formato serializado
+server_public_pem = server_public_key.public_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PublicFormat.SubjectPublicKeyInfo
+)
+
+clients = {}
+
+def encrypt_message(public_key, message):
+    return public_key.encrypt(
+        message.encode(),
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+
+def decrypt_message(private_key, encrypted_message):
+    return private_key.decrypt(
+        encrypted_message,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    ).decode()
 
 def handle_client(client_socket, addr):
     log_message(f"[NEW CONNECTION] {addr} connected.")
-    clients.append(client_socket)
+    
+    # Enviar chave pública do servidor
+    client_socket.send(server_public_pem)
+    
+    # Receber chave pública do cliente
+    client_public_pem = client_socket.recv(4096)
+    client_public_key = serialization.load_pem_public_key(client_public_pem)
+    
+    clients[addr] = (client_socket, client_public_key)
+    
     while True:
         try:
-            msg = client_socket.recv(1024).decode('utf-8')
-            if not msg:
+            encrypted_msg = client_socket.recv(4096)
+            if not encrypted_msg:
                 break
-            log_message(f"[{addr}] {msg}")
-            broadcast(msg, client_socket)
-        except:
+            decrypted_msg = decrypt_message(server_private_key, encrypted_msg)
+            log_message(f"[{addr}] {decrypted_msg}")
+            broadcast(encrypted_msg, client_socket)
+        except Exception as e:
+            print(f"Error: {e}")
             break
     log_message(f"[DISCONNECTED] {addr} disconnected.")
-    clients.remove(client_socket)
+    clients.pop(addr, None)
     client_socket.close()
 
 def broadcast(message, sender_socket=None):
-    for client in clients:
+    for addr, (client, public_key) in clients.items():
         if client != sender_socket:
             try:
-                client.send(message.encode('utf-8'))
+                encrypted_message = encrypt_message(public_key, message.decode())
+                client.send(encrypted_message)
             except:
                 client.close()
-                clients.remove(client)
-
-@app.route('/send', methods=['POST'])
-def send_message():
-    data = request.json
-    message = data.get('message', '')
-    if message:
-        broadcast(f"[SERVER] {message}")
-        log_message(f"[SERVER] {message}")
-        return jsonify({"status": "Message sent"})
-    return jsonify({"error": "No message provided"}), 400
+                clients.pop(addr, None)
 
 def start_server():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -55,7 +87,7 @@ def start_server():
 def send_from_gui():
     message = entry.get()
     if message:
-        broadcast(f"[SERVER] {message}")
+        broadcast(message.encode())
         log_message(f"[SERVER] {message}")
         entry.delete(0, tk.END)
 
@@ -77,8 +109,4 @@ t = threading.Thread(target=start_server)
 t.daemon = True
 t.start()
 
-if __name__ == '__main__':
-    app_thread = threading.Thread(target=lambda: app.run(port=5000))
-    app_thread.daemon = True
-    app_thread.start()
-    tk_root.mainloop()
+tk_root.mainloop()
