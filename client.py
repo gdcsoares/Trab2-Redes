@@ -29,7 +29,8 @@ def encrypt_message(public_key, message):
     )
 
 def decrypt_message(private_key, encrypted_message):
-    return private_key.decrypt(
+    print(f"Mensagem criptografada recebida: {encrypted_message}")
+    decrypted = private_key.decrypt(
         encrypted_message,
         padding.OAEP(
             mgf=padding.MGF1(algorithm=hashes.SHA256()),
@@ -37,6 +38,8 @@ def decrypt_message(private_key, encrypted_message):
             label=None
         )
     ).decode()
+    print(f"Mensagem decodificada: {decrypted}")
+    return decrypted
 
 def receive_messages(client):
     global server_public_key
