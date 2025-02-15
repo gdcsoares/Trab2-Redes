@@ -13,7 +13,7 @@ Este projeto implementa um servidor de chat que suporta comunicação criptograf
   - `tkinter`: Para a interface gráfica do chat.
   - `cryptography`: Para implementação de criptografia (ECC, AES, HKDF).
 
-  ## Como Executar
+## Como Executar
 
 
   ### Requisitos

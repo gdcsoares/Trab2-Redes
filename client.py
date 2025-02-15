@@ -1,5 +1,4 @@
 import socket
-import threading
 import tkinter as tk
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization, hashes
@@ -38,7 +37,7 @@ def encrypt_message(key, message):
     iv = os.urandom(16)
     cipher = Cipher(algorithms.AES(key), modes.GCM(iv))
     encryptor = cipher.encryptor()
-    encrypted = encryptor.update(message) + encryptor.finalize()  # Removido .encode()
+    encrypted = encryptor.update(message) + encryptor.finalize()
     return iv + encryptor.tag + encrypted
 
 def decrypt_message(key, encrypted_message):
@@ -70,37 +69,16 @@ def verify_signature(public_key, message, signature):
     except:
         return False
 
-def receive_messages(client):
-    global shared_key, server_public_key
-    while True:
-        try:
-            encrypted_msg = client.recv(4096)
-            if not encrypted_msg:
-                break
-            decrypted_msg = decrypt_message(shared_key, encrypted_msg)
-            # Verificar se a mensagem contém exatamente um "|"
-            if decrypted_msg.count(b"|") != 1:
-                log_message("Mensagem inválida!")
-                continue
-            # Separar a mensagem da assinatura
-            message, signature = decrypted_msg.split(b"|")
-            # Verificar a assinatura
-            if verify_signature(server_public_key, message, signature):
-                log_message(message.decode())
-            else:
-                log_message("Assinatura inválida!")
-        except:
-            log_message("Disconnected from server.")
-            break
-
 def send_message():
     global shared_key
     message = entry.get()
     if message and shared_key:
         # Assinar a mensagem
         signature = sign_message(client_private_key, message.encode())
-        # Concatenar mensagem e assinatura
-        signed_message = message.encode() + b"|" + signature
+        # Codificar o tamanho da assinatura (4 bytes)
+        signature_size = len(signature).to_bytes(4, byteorder='big')
+        # Concatenar tamanho da assinatura, assinatura e mensagem
+        signed_message = signature_size + signature + message.encode()
         # Criptografar a mensagem assinada
         encrypted_message = encrypt_message(shared_key, signed_message)
         client.send(encrypted_message)
@@ -125,11 +103,32 @@ def start_client():
     # Gerar chave compartilhada
     shared_key = derive_shared_key(client_private_key, server_public_key)
     
-    thread = threading.Thread(target=receive_messages, args=(client,))
-    thread.daemon = True
-    thread.start()
-    
-    tk_root.mainloop()
+    while True:
+        try:
+            # Receber mensagem do servidor
+            encrypted_msg = client.recv(4096)
+            if not encrypted_msg:
+                break
+
+            # Descriptografar a mensagem
+            decrypted_msg = decrypt_message(shared_key, encrypted_msg)
+
+            # Extrair o tamanho da assinatura (primeiros 4 bytes)
+            signature_size = int.from_bytes(decrypted_msg[:4], byteorder='big')
+            # Extrair a assinatura
+            signature = decrypted_msg[4:4 + signature_size]
+            # Extrair a mensagem
+            message = decrypted_msg[4 + signature_size:]
+
+            # Verificar a assinatura
+            if verify_signature(server_public_key, message, signature):
+                log_message(message.decode())
+            else:
+                log_message("Assinatura inválida!")
+
+        except Exception as e:
+            log_message(f"Disconnected from server. Error: {e}")
+            break
 
 # Start GUI for client
 tk_root = tk.Tk()
@@ -143,3 +142,4 @@ btn_send.pack()
 
 if __name__ == "__main__":
     start_client()
+    tk_root.mainloop()

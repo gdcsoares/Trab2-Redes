@@ -1,12 +1,9 @@
-
 import socket
-import threading
 import tkinter as tk
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives.asymmetric import utils
 import os
 
 # Gerar chave privada do servidor (ECC)
@@ -18,8 +15,6 @@ server_public_pem = server_public_key.public_bytes(
     encoding=serialization.Encoding.PEM,
     format=serialization.PublicFormat.SubjectPublicKeyInfo
 )
-
-clients = {}
 
 def derive_shared_key(private_key, peer_public_key):
     # Gerar chave compartilhada usando ECDH
@@ -38,7 +33,7 @@ def encrypt_message(key, message):
     iv = os.urandom(16)
     cipher = Cipher(algorithms.AES(key), modes.GCM(iv))
     encryptor = cipher.encryptor()
-    encrypted = encryptor.update(message) + encryptor.finalize()  # Removido .encode()
+    encrypted = encryptor.update(message) + encryptor.finalize()
     return iv + encryptor.tag + encrypted
 
 def decrypt_message(key, encrypted_message):
@@ -49,64 +44,6 @@ def decrypt_message(key, encrypted_message):
     cipher = Cipher(algorithms.AES(key), modes.GCM(iv, tag))
     decryptor = cipher.decryptor()
     return decryptor.update(ciphertext) + decryptor.finalize()
-
-def handle_client(client_socket, addr):
-    log_message(f"[NEW CONNECTION] {addr} connected.")
-    
-    # Enviar chave pública do servidor
-    client_socket.send(server_public_pem)
-    
-    # Receber chave pública do cliente
-    client_public_pem = client_socket.recv(4096)
-    client_public_key = serialization.load_pem_public_key(client_public_pem)
-    
-    # Gerar chave compartilhada
-    shared_key = derive_shared_key(server_private_key, client_public_key)
-    
-    clients[addr] = (client_socket, shared_key, client_public_key)
-    
-    while True:
-        try:
-            encrypted_msg = client_socket.recv(4096)
-            if not encrypted_msg:
-                break
-            decrypted_msg = decrypt_message(shared_key, encrypted_msg)
-            # Verificar se a mensagem contém exatamente um "|"
-            if decrypted_msg.count(b"|") != 1:
-                log_message(f"[{addr}] Mensagem inválida!")
-                continue
-            # Separar a mensagem da assinatura
-            message, signature = decrypted_msg.split(b"|")
-            # Verificar a assinatura
-            if verify_signature(client_public_key, message, signature):
-                log_message(f"[{addr}] {message.decode()}")
-            else:
-                log_message(f"[{addr}] Assinatura inválida!")
-        except Exception as e:
-            print(f"Error: {e}")
-            break
-    log_message(f"[DISCONNECTED] {addr} disconnected.")
-    clients.pop(addr, None)
-    client_socket.close()
-
-def broadcast(message, sender_socket=None):
-    for addr, (client, shared_key) in clients.items():
-        if client != sender_socket:
-            try:
-                client.send(message)
-            except:
-                client.close()
-                clients.pop(addr, None)
-
-def start_server():
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind(("0.0.0.0", 5555))
-    server.listen(5)
-    log_message("[LISTENING] Server is running on port 5555")
-    while True:
-        client_socket, addr = server.accept()
-        thread = threading.Thread(target=handle_client, args=(client_socket, addr))
-        thread.start()
 
 def sign_message(private_key, message):
     # Assinar a mensagem com a chave privada ECC
@@ -128,17 +65,64 @@ def verify_signature(public_key, message, signature):
     except:
         return False
 
+def start_server():
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(("0.0.0.0", 5555))
+    server.listen(1)  # Aceita apenas um cliente
+    log_message("[LISTENING] Server is running on port 5555")
+
+    client_socket, addr = server.accept()
+    log_message(f"[NEW CONNECTION] {addr} connected.")
+
+    # Enviar chave pública do servidor
+    client_socket.send(server_public_pem)
+
+    # Receber chave pública do cliente
+    client_public_pem = client_socket.recv(4096)
+    client_public_key = serialization.load_pem_public_key(client_public_pem)
+
+    # Gerar chave compartilhada
+    shared_key = derive_shared_key(server_private_key, client_public_key)
+
+    while True:
+        try:
+            # Receber mensagem do cliente
+            encrypted_msg = client_socket.recv(4096)
+            if not encrypted_msg:
+                break
+
+            # Descriptografar a mensagem
+            decrypted_msg = decrypt_message(shared_key, encrypted_msg)
+
+            # Verificar a assinatura
+            signature_size = int.from_bytes(decrypted_msg[:4], byteorder='big')
+            signature = decrypted_msg[4:4 + signature_size]
+            message = decrypted_msg[4 + signature_size:]
+
+            if verify_signature(client_public_key, message, signature):
+                log_message(f"[CLIENT] {message.decode()}")
+            else:
+                log_message("Assinatura inválida!")
+
+        except Exception as e:
+            log_message(f"Error: {e}")
+            break
+
+    log_message(f"[DISCONNECTED] {addr} disconnected.")
+    client_socket.close()
+
 def send_from_gui():
     message = entry.get()
-    if message:
-        for addr, (client, shared_key, client_public_key) in clients.items():
-            # Assinar a mensagem
-            signature = sign_message(server_private_key, message.encode())
-            # Concatenar mensagem e assinatura
-            signed_message = message.encode() + b"|" + signature
-            # Criptografar a mensagem assinada
-            encrypted_message = encrypt_message(shared_key, signed_message)
-            client.send(encrypted_message)
+    if message and 'client_socket' in globals():
+        # Assinar a mensagem
+        signature = sign_message(server_private_key, message.encode())
+        # Codificar o tamanho da assinatura (4 bytes)
+        signature_size = len(signature).to_bytes(4, byteorder='big')
+        # Concatenar tamanho da assinatura, assinatura e mensagem
+        signed_message = signature_size + signature + message.encode()
+        # Criptografar a mensagem assinada
+        encrypted_message = encrypt_message(shared_key, signed_message)
+        client_socket.send(encrypted_message)
         log_message(f"[SERVER] {message}")
         entry.delete(0, tk.END)
 
@@ -156,8 +140,7 @@ entry.pack()
 btn_send = tk.Button(tk_root, text="Send", command=send_from_gui)
 btn_send.pack()
 
-t = threading.Thread(target=start_server)
-t.daemon = True
-t.start()
+# Iniciar o servidor
+start_server()
 
 tk_root.mainloop()
