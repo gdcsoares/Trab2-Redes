@@ -108,15 +108,23 @@ def send_message():
             tk_root.quit()  # Fechar a interface gráfica
             sys.exit()  # Encerrar o programa
             return
+        
         # Assinar a mensagem
         signature = sign_message(client_private_key, message.encode())
-        # Concatenar mensagem e assinatura
-        signed_message = message.encode() + b"|" + signature
+        
+        # Codificar o tamanho da assinatura (4 bytes)
+        signature_size = len(signature).to_bytes(4, byteorder='big')
+        
+        # Concatenar tamanho da assinatura, assinatura e mensagem
+        signed_message = signature_size + signature + message.encode()
+        
         # Criptografar a mensagem assinada
         encrypted_message = encrypt_message(shared_key, signed_message)
+        
+        # Enviar a mensagem criptografada
         client.send(encrypted_message)
         entry.delete(0, tk.END)
-
+        
 def log_message(msg):
     chat_log.insert(tk.END, msg + '\n')
     chat_log.yview(tk.END)

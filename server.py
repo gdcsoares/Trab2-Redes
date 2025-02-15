@@ -70,13 +70,19 @@ def handle_client(client_socket, addr):
             encrypted_msg = client_socket.recv(4096)
             if not encrypted_msg:
                 break
+            
+            # Descriptografar a mensagem
             decrypted_msg = decrypt_message(shared_key, encrypted_msg)
-            # Verificar se a mensagem contém exatamente um "|"
-            if decrypted_msg.count(b"|") != 1:
-                log_message(f"[{addr}] Mensagem inválida!")
-                continue
-            # Separar a mensagem da assinatura
-            message, signature = decrypted_msg.split(b"|")
+            
+            # Extrair o tamanho da assinatura (primeiros 4 bytes)
+            signature_size = int.from_bytes(decrypted_msg[:4], byteorder='big')
+            
+            # Extrair a assinatura
+            signature = decrypted_msg[4:4 + signature_size]
+            
+            # Extrair a mensagem
+            message = decrypted_msg[4 + signature_size:]
+            
             # Verificar a assinatura
             if verify_signature(client_public_key, message, signature):
                 log_message(f"[{addr}] {message.decode()}")
@@ -85,6 +91,7 @@ def handle_client(client_socket, addr):
         except Exception as e:
             print(f"Error: {e}")
             break
+    
     log_message(f"[DISCONNECTED] {addr} disconnected.")
     clients.pop(addr, None)
     client_socket.close()
