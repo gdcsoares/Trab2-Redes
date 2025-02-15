@@ -1,12 +1,16 @@
-# server.py
+
 import socket
 import threading
 import tkinter as tk
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.asymmetric import utils
+import os
 
-# Gerar chave privada do servidor
-server_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+# Gerar chave privada do servidor (ECC)
+server_private_key = ec.generate_private_key(ec.SECP256R1())
 server_public_key = server_private_key.public_key()
 
 # Armazenar chave pública em formato serializado
@@ -17,25 +21,34 @@ server_public_pem = server_public_key.public_bytes(
 
 clients = {}
 
-def encrypt_message(public_key, message):
-    return public_key.encrypt(
-        message.encode(),
-        padding.OAEP(
-            mgf=padding.MGF1(algorithm=hashes.SHA256()),
-            algorithm=hashes.SHA256(),
-            label=None
-        )
-    )
+def derive_shared_key(private_key, peer_public_key):
+    # Gerar chave compartilhada usando ECDH
+    shared_key = private_key.exchange(ec.ECDH(), peer_public_key)
+    # Derivar uma chave AES usando HKDF
+    derived_key = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=None,
+        info=b'handshake data',
+    ).derive(shared_key)
+    return derived_key
 
-def decrypt_message(private_key, encrypted_message):
-    return private_key.decrypt(
-        encrypted_message,
-        padding.OAEP(
-            mgf=padding.MGF1(algorithm=hashes.SHA256()),
-            algorithm=hashes.SHA256(),
-            label=None
-        )
-    ).decode()
+def encrypt_message(key, message):
+    # Usar AES para criptografar a mensagem
+    iv = os.urandom(16)
+    cipher = Cipher(algorithms.AES(key), modes.GCM(iv))
+    encryptor = cipher.encryptor()
+    encrypted = encryptor.update(message) + encryptor.finalize()  # Removido .encode()
+    return iv + encryptor.tag + encrypted
+
+def decrypt_message(key, encrypted_message):
+    # Usar AES para descriptografar a mensagem
+    iv = encrypted_message[:16]
+    tag = encrypted_message[16:32]
+    ciphertext = encrypted_message[32:]
+    cipher = Cipher(algorithms.AES(key), modes.GCM(iv, tag))
+    decryptor = cipher.decryptor()
+    return decryptor.update(ciphertext) + decryptor.finalize()
 
 def handle_client(client_socket, addr):
     log_message(f"[NEW CONNECTION] {addr} connected.")
@@ -47,16 +60,28 @@ def handle_client(client_socket, addr):
     client_public_pem = client_socket.recv(4096)
     client_public_key = serialization.load_pem_public_key(client_public_pem)
     
-    clients[addr] = (client_socket, client_public_key)
+    # Gerar chave compartilhada
+    shared_key = derive_shared_key(server_private_key, client_public_key)
+    
+    clients[addr] = (client_socket, shared_key, client_public_key)
     
     while True:
         try:
             encrypted_msg = client_socket.recv(4096)
             if not encrypted_msg:
                 break
-            decrypted_msg = decrypt_message(server_private_key, encrypted_msg)
-            log_message(f"[{addr}] {decrypted_msg}")
-            broadcast(encrypted_msg, client_socket)
+            decrypted_msg = decrypt_message(shared_key, encrypted_msg)
+            # Verificar se a mensagem contém exatamente um "|"
+            if decrypted_msg.count(b"|") != 1:
+                log_message(f"[{addr}] Mensagem inválida!")
+                continue
+            # Separar a mensagem da assinatura
+            message, signature = decrypted_msg.split(b"|")
+            # Verificar a assinatura
+            if verify_signature(client_public_key, message, signature):
+                log_message(f"[{addr}] {message.decode()}")
+            else:
+                log_message(f"[{addr}] Assinatura inválida!")
         except Exception as e:
             print(f"Error: {e}")
             break
@@ -65,11 +90,10 @@ def handle_client(client_socket, addr):
     client_socket.close()
 
 def broadcast(message, sender_socket=None):
-    for addr, (client, public_key) in clients.items():
+    for addr, (client, shared_key) in clients.items():
         if client != sender_socket:
             try:
-                encrypted_message = encrypt_message(public_key, message.decode())
-                client.send(encrypted_message)
+                client.send(message)
             except:
                 client.close()
                 clients.pop(addr, None)
@@ -84,10 +108,37 @@ def start_server():
         thread = threading.Thread(target=handle_client, args=(client_socket, addr))
         thread.start()
 
+def sign_message(private_key, message):
+    # Assinar a mensagem com a chave privada ECC
+    signature = private_key.sign(
+        message,
+        ec.ECDSA(hashes.SHA256())
+    )
+    return signature
+
+def verify_signature(public_key, message, signature):
+    # Verificar a assinatura com a chave pública ECC
+    try:
+        public_key.verify(
+            signature,
+            message,
+            ec.ECDSA(hashes.SHA256())
+        )
+        return True
+    except:
+        return False
+
 def send_from_gui():
     message = entry.get()
     if message:
-        broadcast(message.encode())
+        for addr, (client, shared_key, client_public_key) in clients.items():
+            # Assinar a mensagem
+            signature = sign_message(server_private_key, message.encode())
+            # Concatenar mensagem e assinatura
+            signed_message = message.encode() + b"|" + signature
+            # Criptografar a mensagem assinada
+            encrypted_message = encrypt_message(shared_key, signed_message)
+            client.send(encrypted_message)
         log_message(f"[SERVER] {message}")
         entry.delete(0, tk.END)
 
