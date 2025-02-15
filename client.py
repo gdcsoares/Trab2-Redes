@@ -6,6 +6,7 @@ from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import os
+import sys
 
 # Gerar chave privada do cliente (ECC)
 client_private_key = ec.generate_private_key(ec.SECP256R1())
@@ -20,6 +21,7 @@ client_public_pem = client_public_key.public_bytes(
 # Variável global para armazenar a chave pública do servidor
 server_public_key = None
 shared_key = None
+client = None
 
 def derive_shared_key(private_key, peer_public_key):
     # Gerar chave compartilhada usando ECDH
@@ -96,9 +98,16 @@ def receive_messages(client):
             break
 
 def send_message():
-    global shared_key
+    global shared_key, client
     message = entry.get()
     if message and shared_key:
+        if message == "end":
+            # Fechar a conexão com o servidor
+            client.close()
+            log_message("[CLIENT] Connection closed.")
+            tk_root.quit()  # Fechar a interface gráfica
+            sys.exit()  # Encerrar o programa
+            return
         # Assinar a mensagem
         signature = sign_message(client_private_key, message.encode())
         # Concatenar mensagem e assinatura

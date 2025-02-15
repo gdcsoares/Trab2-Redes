@@ -1,4 +1,3 @@
-
 import socket
 import threading
 import tkinter as tk
@@ -8,6 +7,7 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.asymmetric import utils
 import os
+import sys
 
 # Gerar chave privada do servidor (ECC)
 server_private_key = ec.generate_private_key(ec.SECP256R1())
@@ -98,6 +98,13 @@ def broadcast(message, sender_socket=None):
                 client.close()
                 clients.pop(addr, None)
 
+def close_all_connections():
+    for addr, (client, shared_key, client_public_key) in clients.items():
+        client.close()
+    clients.clear()
+    log_message("[SERVER] All connections closed.")
+    sys.exit()
+
 def start_server():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(("0.0.0.0", 5555))
@@ -131,6 +138,9 @@ def verify_signature(public_key, message, signature):
 def send_from_gui():
     message = entry.get()
     if message:
+        if message == 'end':
+            close_all_connections()
+            return
         for addr, (client, shared_key, client_public_key) in clients.items():
             # Assinar a mensagem
             signature = sign_message(server_private_key, message.encode())
@@ -143,6 +153,7 @@ def send_from_gui():
             client.send(encrypted_message)
         log_message(f"[SERVER] {message}")
         entry.delete(0, tk.END)
+
 def log_message(msg):
     chat_log.insert(tk.END, msg + '\n')
     chat_log.yview(tk.END)
