@@ -63,7 +63,7 @@ Este projeto implementa um servidor de chat que suporta comunicação criptograf
 6. Para encerrar a conexão, digite "end" no campo de texto de cada cliente (ou feche a interface) e depois escreva "end" no campo do servidor.
 
 
-### Funcionalidades Implementadas
+## Funcionalidades Implementadas
 
 - Troca segura de chaves usando ECDH.
 
@@ -75,7 +75,7 @@ Este projeto implementa um servidor de chat que suporta comunicação criptograf
 
 - Suporte para múltiplos clientes conectados ao servidor.
 
-### Possíveis Melhorias Futuras
+## Possíveis Melhorias Futuras
 
 - Adicionar suporte para salas de chat privadas.
 
