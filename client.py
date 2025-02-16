@@ -79,6 +79,10 @@ def receive_messages(client):
             encrypted_msg = client.recv(4096)
             if not encrypted_msg:
                 break
+            
+            # Imprimir a mensagem criptografada no terminal
+            print(f"[CLIENT] Mensagem criptografada recebida: {encrypted_msg.hex()}")
+            
             decrypted_msg = decrypt_message(shared_key, encrypted_msg)
             
             # Extrair o tamanho da assinatura (primeiros 4 bytes)
@@ -101,7 +105,7 @@ def send_message():
     global shared_key, client
     message = entry.get()
     if message and shared_key:
-        if message == "end":
+        if message == 'end':
             # Fechar a conexão com o servidor
             client.close()
             log_message("[CLIENT] Connection closed.")
@@ -124,7 +128,7 @@ def send_message():
         # Enviar a mensagem criptografada
         client.send(encrypted_message)
         entry.delete(0, tk.END)
-        
+
 def log_message(msg):
     chat_log.insert(tk.END, msg + '\n')
     chat_log.yview(tk.END)
@@ -143,6 +147,9 @@ def start_client():
     
     # Gerar chave compartilhada
     shared_key = derive_shared_key(client_private_key, server_public_key)
+    
+    # Imprimir a chave compartilhada no terminal
+    print(f"[CLIENT] Chave compartilhada gerada: {shared_key.hex()}")
     
     thread = threading.Thread(target=receive_messages, args=(client,))
     thread.daemon = True
