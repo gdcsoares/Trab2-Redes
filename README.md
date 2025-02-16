@@ -62,3 +62,26 @@ Este projeto implementa um servidor de chat que suporta comunicação criptograf
 
 6. Para encerrar a conexão, digite "end" no campo de texto de cada cliente (ou feche a interface) e depois escreva "end" no campo do servidor.
 
+
+### Funcionalidades Implementadas
+
+- Troca segura de chaves usando ECDH.
+
+- Criptografia de mensagens com AES-GCM.
+
+- Autenticação de mensagens com assinaturas ECDSA.
+
+- Interface gráfica simples para envio e recebimento de mensagens.
+
+- Suporte para múltiplos clientes conectados ao servidor.
+
+### Possíveis Melhorias Futuras
+
+- Adicionar suporte para salas de chat privadas.
+
+- Adicionar suporte para autenticação de usuários.
+
+- Melhorar a interface gráfica com mais funcionalidades, como histórico de mensagens e notificações.
+
+- Implementar um sistema de logs mais detalhado para depuração e monitoramento.
+
