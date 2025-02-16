@@ -32,7 +32,7 @@ Este projeto implementa um servidor de chat que suporta comunicação criptograf
    python -m tkinter
 
    Caso não esteja, executar: 
-   ``bash
+   `bash
    sudo apt update
    sudo apt install python3-tk
 
