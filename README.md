@@ -31,21 +31,20 @@ Este projeto implementa um servidor de chat que suporta comunicação criptograf
    ```bash
    python -m tkinter
 
-    -Caso não esteja, execute:
-
+3. Caso não esteja, execute:
    ```bash
    sudo apt update  
    sudo apt install python3-tk  
 
-3. Instale as dependências:
+4. Instale as dependências:
    ```bash
    pip install cryptography
 
-4. Execute o servidor:
+5. Execute o servidor:
    ```bash
    python server.py
 
-5. Execute o cliente:
+6. Execute o cliente:
    ```bash
    python client.py
 
