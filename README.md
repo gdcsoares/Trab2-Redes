@@ -27,14 +27,15 @@ Este projeto implementa um servidor de chat que suporta comunicação criptograf
    ```bash
    git clone https://github.com/gdcsoares/Trab2-Redes.git
 
-2. Verifique se o `tkinter` está instalado:
+2. Verifique se o `tkinter` está instalado:  
    ```bash
    python -m tkinter
 
-   Caso não esteja, executar: 
-   `bash
-   sudo apt update
-   sudo apt install python3-tk
+    Caso não esteja, execute:
+
+     `bash
+     sudo apt update  
+     sudo apt install python3-tk  
 
 3. Instale as dependências:
    ```bash
