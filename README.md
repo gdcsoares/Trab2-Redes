@@ -28,21 +28,25 @@ Este projeto implementa um servidor de chat que suporta comunicação criptograf
    git clone https://github.com/gdcsoares/Trab2-Redes.git
 
 2. Verifique se o `tkinter` está instalado:
-  ```bash
-  python -m tkinter
+   ```bash
+   python -m tkinter
+
   Caso não esteja, executar: 
-  ```bash
-  sudo apt update
-  sudo apt install python3-tk
+   ```bash
+   sudo apt update
+   sudo apt install python3-tk
 
 3. Instale as dependências:
-  pip install `cryptography`
+   ```bash
+   pip install cryptography
 
 4. Execute o servidor:
-  python server.py
+   ```bash
+   python server.py
 
 5. Execute o cliente:
-  python client.py
+   ```bash
+   python client.py
 
 ## Como Testar
 
