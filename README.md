@@ -31,8 +31,8 @@ Este projeto implementa um servidor de chat que suporta comunicação criptograf
    ```bash
    python -m tkinter
 
-  Caso não esteja, executar: 
-   ```bash
+   Caso não esteja, executar: 
+   ``bash
    sudo apt update
    sudo apt install python3-tk
 
