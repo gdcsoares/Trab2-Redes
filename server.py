@@ -62,6 +62,8 @@ def handle_client(client_socket, addr):
     
     # Gerar chave compartilhada
     shared_key = derive_shared_key(server_private_key, client_public_key)
+
+    print(f"[SERVER] Chave compartilhada gerada para {addr}: {shared_key.hex()}")
     
     clients[addr] = (client_socket, shared_key, client_public_key)
     
@@ -71,6 +73,7 @@ def handle_client(client_socket, addr):
             if not encrypted_msg:
                 break
             
+            print(f"[SERVER] Mensagem criptografada recebida de {addr}: {encrypted_msg.hex()}")
             # Descriptografar a mensagem
             decrypted_msg = decrypt_message(shared_key, encrypted_msg)
             
